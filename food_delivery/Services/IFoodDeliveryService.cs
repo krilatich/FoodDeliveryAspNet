@@ -29,7 +29,7 @@ namespace food_delivery.Services
 
         Task<bool> Check(Guid dishId, string email);
 
-        Task CreateOrder(CreateOrderDto model, string email);
+        Task<int> CreateOrder(CreateOrderDto model, string email);
 
         Task<int> ConfirmOrder(Guid id, string email);
 
@@ -48,10 +48,10 @@ namespace food_delivery.Services
         Task<IEnumerable<DishBasketDto>> GetBasket(string email);
         Task<ClaimsIdentity> GetIdentity(string email, string password);
 
-        Task addDish(Guid dishId, string email);
-        Task deleteDish(Guid dishId, bool increase, string email);
+        Task <int> addDish(Guid dishId, string email);
+        Task<int> deleteDish(Guid dishId, bool increase, string email);
 
-        Task <OrderDto> OrderDetails(Guid id,string email);
+        Task <OrderDto?> OrderDetails(Guid id,string email);
 
         Task<IEnumerable<OrderInfo>> GetOrders(string email);
 
@@ -137,12 +137,14 @@ namespace food_delivery.Services
 
         }
 
-        public async Task addDish(Guid dishId, string email)
+        public async Task <int> addDish(Guid dishId, string email)
         {
 
             var userId = (await GetProfile(email)).Id;
 
             var dish = await _context.Dishes.FindAsync(dishId);
+
+            if(dish== null) { return 404; }
 
             var dishBasket = await _context.DishBaskets.FirstOrDefaultAsync(x => x.UserId == userId && x.DishId == dishId);
 
@@ -170,16 +172,19 @@ namespace food_delivery.Services
 
             await _context.SaveChangesAsync();
 
+            return 200;
 
         }
 
 
-        public async Task deleteDish(Guid dishId, bool increase, string email)
+        public async Task <int> deleteDish(Guid dishId, bool increase, string email)
         {
             var userId = (await GetProfile(email)).Id;
 
             var dishBasket = await _context.DishBaskets.SingleOrDefaultAsync
                 (x => x.DishId == dishId && x.UserId == userId);
+
+            if (dishBasket != null) { return 400; }
 
             if (!increase)
             {
@@ -194,6 +199,8 @@ namespace food_delivery.Services
 
 
             await _context.SaveChangesAsync();
+
+            return 200;
 
         }
 
@@ -278,28 +285,28 @@ namespace food_delivery.Services
             switch (sorting)
             {
                 case DishSorting.NameAsc:
-                    dishesPerPages = dishesPerPages.OrderBy(x => x.name)
-                        .Skip((page - 1) * pageSize).Take(pageSize);
+                    dishesPerPages = dishesPerPages.OrderBy(x => x.name);
+                        
                     break;
                 case DishSorting.NameDesc:
-                    dishesPerPages = dishesPerPages.OrderByDescending(x => x.name)
-                        .Skip((page - 1) * pageSize).Take(pageSize);
+                    dishesPerPages = dishesPerPages.OrderByDescending(x => x.name);
+                        
                     break;
                 case DishSorting.PriceDesc:
-                    dishesPerPages = dishesPerPages.OrderByDescending(x => x.price)
-                        .Skip((page - 1) * pageSize).Take(pageSize);
+                    dishesPerPages = dishesPerPages.OrderByDescending(x => x.price);
+                        
                     break;
                 case DishSorting.RatingDesc:
-                    dishesPerPages = dishesPerPages.OrderByDescending(x => x.rating)
-                        .Skip((page - 1) * pageSize).Take(pageSize);
+                    dishesPerPages = dishesPerPages.OrderByDescending(x => x.rating);
+                        
                     break;
                 case DishSorting.PriceAsc:
-                    dishesPerPages = dishesPerPages.OrderBy(x => x.price)
-                        .Skip((page - 1) * pageSize).Take(pageSize);
+                    dishesPerPages = dishesPerPages.OrderBy(x => x.price);
+                        
                     break;
                 case DishSorting.RatingAsc:
-                    dishesPerPages = dishesPerPages.OrderBy(x => x.rating)
-                        .Skip((page - 1) * pageSize).Take(pageSize);
+                    dishesPerPages = dishesPerPages.OrderBy(x => x.rating);
+                        
                     break;
 
             }
@@ -317,6 +324,8 @@ namespace food_delivery.Services
             };
 
 
+            dishesPerPages = dishesPerPages.Skip((page - 1) * pageSize).Take(pageSize);
+
 
             var response = new
             {
@@ -333,11 +342,13 @@ namespace food_delivery.Services
             dishBaskets.ForEach(d => { price += d.totalPrice; });
             return price;
         }
-        public async Task CreateOrder(CreateOrderDto model, string email)
+        public async Task<int>  CreateOrder(CreateOrderDto model, string email)
         {
 
 
             List<DishBasketDto> dishes = (await GetBasket(email)).ToList();
+
+            if(dishes.IsNullOrEmpty()) { return 403; }
 
             var order = new Order
             {
@@ -372,6 +383,8 @@ namespace food_delivery.Services
 
             await _context.SaveChangesAsync();
 
+            return 200;
+
         }
 
         public async Task<ICollection<DishBasketDto>> getDishesFromOrder(Guid id)
@@ -402,11 +415,16 @@ namespace food_delivery.Services
             return dishBasketDtos;
 
         }
-        public async Task<OrderDto> OrderDetails(Guid id, string email)
+        public async Task<OrderDto?> OrderDetails(Guid id, string email)
         {
             var order = await _context.Orders.FindAsync(id);
+
+            if (order == null) return null;
+
+
             var userId = (await GetProfile(email)).Id;
-            if (order.UserId != userId) return new OrderDto();
+            
+            if (order.UserId != userId) return null;
 
             return new OrderDto
             {
